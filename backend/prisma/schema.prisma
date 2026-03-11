@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // For migrations if using connection pooling
+}
+
+// Tenant/Company model - each company is a tenant
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  subdomain   String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  users       User[]
+  issues      Issue[]
+}
+
+model User {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  password   String
+  name       String
+  role       Role     @default(USER)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  // Foreign keys
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Relations
+  assignedIssues Issue[] @relation("AssignedUser")
+  createdIssues  Issue[] @relation("CreatedUser")
+  
+  @@unique([email, tenantId])
+  @@index([tenantId])
+}
+
+model Issue {
+  id          String      @id @default(cuid())
+  title       String
+  description String?
+  status      IssueStatus @default(OPEN)
+  priority    Priority    @default(MEDIUM)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Foreign keys - ensure tenant isolation
+  tenantId    String
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  createdById String
+  createdBy   User        @relation("CreatedUser", fields: [createdById], references: [id])
+  
+  assignedToId String?
+  assignedTo   User?       @relation("AssignedUser", fields: [assignedToId], references: [id])
+  
+  @@index([tenantId])
+  @@index([status])
+  @@index([assignedToId])
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum IssueStatus {
+  OPEN
+  IN_PROGRESS
+  REVIEW
+  DONE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
